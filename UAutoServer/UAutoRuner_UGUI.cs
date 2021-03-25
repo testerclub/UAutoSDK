@@ -46,6 +46,7 @@ namespace UAutoSDK
         private System.Collections.IEnumerator DebugModeEnumerator = null;
 
         private bool debugModeDeepSearch = false;
+        private bool pauseDebugMode = false;
 
         public void Init()
         {
@@ -77,6 +78,9 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("getPNGScreenshot", getPNGScreenshotHandler);
             m_Handlers.addMsgHandler("dragObject", dragObjectHandler);
             m_Handlers.addMsgHandler("debugMode", debugModeHandler);
+            m_Handlers.addMsgHandler("pauseDebugMode", pauseDebugModeHandler);
+            m_Handlers.addMsgHandler("resumeDebugMode", resumeDebugModeHandler);
+            m_Handlers.addMsgHandler("stopDebugMode", stopDebugModeHandler);
             m_Handlers.addMsgHandler("findAllText", findAllTextHandler);
             m_Handlers.addMsgHandler("objectFind", objectFindHandler);
             m_Handlers.addMsgHandler("getParent", getParentHandler);
@@ -1361,10 +1365,41 @@ namespace UAutoSDK
             }
         }
 
+        private object resumeDebugModeHandler(string[] args)
+        {
+            pauseDebugMode = false;
+            return "200";
+        }
+
+        private object pauseDebugModeHandler(string[] args)
+        {
+            pauseDebugMode = true;
+            return "200";
+        }
+
+        private object stopDebugModeHandler(string[] args)
+        {
+            try
+            {
+                if (DebugModeEnumerator != null)
+                {
+                    StopCoroutine(DebugModeEnumerator);
+                    DebugModeEnumerator = null;
+                }
+
+                return "Close Debug Mode";
+            }
+            catch(Exception e)
+            {
+                return e.ToString();
+            }
+        }
+
         private object debugModeHandler(string[] args)
         {
             try
             {
+                pauseDebugMode = false;
                 data.Clear();
                 string msgs = "";
                 // 开启深度搜索（点击屏幕获取所有点中的UI）
@@ -1515,7 +1550,6 @@ namespace UAutoSDK
             EventSystem.current.SetSelectedGameObject(null);
             while (true)
             {
-
                 if (client == null || client.TcpClient == null || !client.TcpClient.Connected)
                 {
                     StopCoroutine(DebugModeEnumerator);
@@ -1523,158 +1557,161 @@ namespace UAutoSDK
                     yield break;
                 }
                 
-                //按住5秒就关闭调试模式
-                if(Input.GetMouseButton(0))
+                // 暂停录制
+                if (!pauseDebugMode)
                 {
-
-                    quitTime += Time.unscaledDeltaTime;
-
-                    if(debugModeDeepSearch)
+                    //按住5秒就关闭调试模式
+                    if(Input.GetMouseButton(0))
                     {
-                        List<Graphic> graphics = FindAllGameObject<Graphic>();
-                        Vector2 mousePos = new Vector2(Input.mousePosition.x, Input.mousePosition.y);
 
-                        dataJson.Clear();
-                        dataJson.Append("[");
-                        foreach(var graphic in graphics)
+                        quitTime += Time.unscaledDeltaTime;
+
+                        if(debugModeDeepSearch)
                         {
-                            RectTransform rect = graphic.gameObject.GetComponent<RectTransform>();
+                            List<Graphic> graphics = FindAllGameObject<Graphic>();
+                            Vector2 mousePos = new Vector2(Input.mousePosition.x, Input.mousePosition.y);
 
-                            
-                            Vector3[] targetPoint = GetScreenCoordinates(rect);
-                            
-                            //Debug.Log($"({rect.rect.left}, {rect.rect.right}, {rect.rect.top}, {rect.rect.bottom}), ({mousePos.x}, {mousePos.y})");
-                            if(targetPoint[0].x < mousePos.x && targetPoint[2].x > mousePos.x && targetPoint[0].y < mousePos.y && targetPoint[2].y > mousePos.y)
+                            dataJson.Clear();
+                            dataJson.Append("[");
+                            foreach(var graphic in graphics)
                             {
-                                string path = GetGameObjectPath(rect.gameObject);
-                                dataJson.Append("{\"path\":\"" + path + "\",\"id\":\"" + rect.gameObject.GetInstanceID().ToString() + "\"},");
+                                RectTransform rect = graphic.gameObject.GetComponent<RectTransform>();
+
+                                
+                                Vector3[] targetPoint = GetScreenCoordinates(rect);
+                                
+                                //Debug.Log($"({rect.rect.left}, {rect.rect.right}, {rect.rect.top}, {rect.rect.bottom}), ({mousePos.x}, {mousePos.y})");
+                                if(targetPoint[0].x < mousePos.x && targetPoint[2].x > mousePos.x && targetPoint[0].y < mousePos.y && targetPoint[2].y > mousePos.y)
+                                {
+                                    string path = GetGameObjectPath(rect.gameObject);
+                                    dataJson.Append("{\"path\":\"" + path + "\",\"id\":\"" + rect.gameObject.GetInstanceID().ToString() + "\"},");
+                                }
+                                else
+                                {
+                                    //dataJson.Append("{\"log\":\"" + $"({rect.rect.left}, {rect.rect.right}, {rect.rect.top}, {rect.rect.bottom}), ({mousePos.x}, {mousePos.y})" + "\"}");
+                                }
                             }
-                            else
-                            {
-                                //dataJson.Append("{\"log\":\"" + $"({rect.rect.left}, {rect.rect.right}, {rect.rect.top}, {rect.rect.bottom}), ({mousePos.x}, {mousePos.y})" + "\"}");
-                            }
-                        }
-                        if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
-                        dataJson.Append("]");
-                        
-                        server.Send(client.TcpClient, prot.pack(dataJson.ToString()));
-                    }
-                }
-                else
-                {
-                    quitTime = 0;
-                }
-
-                if (quitTime >= maxQuitTime)
-                {
-                    server.Send(client.TcpClient, prot.pack("Close Debug Mode"));
-                    StopCoroutine(DebugModeEnumerator);
-                    DebugModeEnumerator = null;
-                    yield break;
-                }
-
-                try
-                {
-                    //当在触摸或者点击的结束阶段时，如果是可拖动的物体则返回位置
-                    if (selectable != null && selectable is IDragHandler && Input.GetMouseButtonUp(0))
-                    {
-                        // data.Clear();
-                        data.Add("name", GetGameObjectPath(selectable.gameObject));
-                        data.Add("type", selectable.GetType().ToString());
-                        data.Add("end position", Input.mousePosition.ToString());
-                        data.Add("time", (nowTime - lastTime).ToString());
-                        server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
-                        data.Clear();
-                        selectable = null;
-                    }
-
-
-
-                    if(Input.GetMouseButtonDown(0))
-                    {
-                        Vector2 pos = Input.mousePosition;
-                        data.Add("press position", pos.ToString());
-                        
-                        Touch touch = new Touch { position = pos };
-                        PointerEventData pointerEventData = MockUpPointerInputModule.GetPointerEventData(touch);
-                        if(pointerEventData.pointerPress != null)
-                        {
-                            lastPressGameObject = pointerEventData.pointerPress;
+                            if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
+                            dataJson.Append("]");
+                            
+                            server.Send(client.TcpClient, prot.pack(dataJson.ToString()));
                         }
                     }
                     else
                     {
-                        lastPressGameObject = null;
+                        quitTime = 0;
                     }
 
-                    //当选中物体时
-                    if (flagGameObject != lastPressGameObject)
+                    
+                    if (quitTime >= maxQuitTime)
                     {
-                        lastTime = nowTime;
-                        nowTime = Time.unscaledTime;
-                        flagGameObject = lastPressGameObject;
-                        if (lastSelectedGameObject == flagGameObject)
+                        server.Send(client.TcpClient, prot.pack("Close Debug Mode"));
+                        StopCoroutine(DebugModeEnumerator);
+                        DebugModeEnumerator = null;
+                        yield break;
+                    }
+
+                    try
+                    {
+                        //当在触摸或者点击的结束阶段时，如果是可拖动的物体则返回位置
+                        if (selectable != null && selectable is IDragHandler && Input.GetMouseButtonUp(0))
                         {
-                            //重复选中物体时
-                            //quitFlag++;
+                            // data.Clear();
+                            data.Add("name", GetGameObjectPath(selectable.gameObject));
+                            data.Add("type", selectable.GetType().ToString());
+                            data.Add("end position", Input.mousePosition.ToString());
+                            data.Add("time", (nowTime - lastTime).ToString());
+                            server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
+                            data.Clear();
+                            selectable = null;
+                        }
+
+                        if(Input.GetMouseButtonDown(0))
+                        {
+                            Vector2 pos = Input.mousePosition;
+                            data.Add("press position", pos.ToString());
+                            
+                            Touch touch = new Touch { position = pos };
+                            PointerEventData pointerEventData = MockUpPointerInputModule.GetPointerEventData(touch);
+                            if(pointerEventData.pointerPress != null)
+                            {
+                                lastPressGameObject = pointerEventData.pointerPress;
+                            }
                         }
                         else
                         {
-                            //当切换选中物体时
-                            if(lastSelectedGameObject != null)
-                            {
-                                InputField inputField = lastSelectedGameObject.GetComponent<InputField>();
-                                if (inputField)
-                                {
-                                    textVaule = inputField.text;
-                                    
-                                    data.Add("name", GetGameObjectPath(lastSelectedGameObject));
-                                    data.Add("type", inputField.GetType().ToString());
-                                    data.Add("value", textVaule);
-                                    data.Add("time", (nowTime - lastTime).ToString());
-                                    server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
-                                    data.Clear();
-                                }
-                            }
-                            lastSelectedGameObject = flagGameObject;
-                            //quitFlag = 0;
+                            lastPressGameObject = null;
                         }
-                        if (flagGameObject != null) selectable = flagGameObject.GetComponent<Selectable>();
-                        else selectable = null;
-                        if (client.TcpClient.Connected && flagGameObject != null)
+
+                        //当选中物体时
+                        if (flagGameObject != lastPressGameObject)
                         {
-                            data.Add("name", GetGameObjectPath(flagGameObject));
-                            if (selectable)
+                            lastTime = nowTime;
+                            nowTime = Time.unscaledTime;
+                            flagGameObject = lastPressGameObject;
+                            if (lastSelectedGameObject == flagGameObject)
                             {
-                                data.Add("type", selectable.GetType().ToString());
-                                if (selectable is IDragHandler && Input.GetMouseButtonDown(0))
-                                {
-                                    data.Add("start position", Input.mousePosition.ToString());
-                                }
+                                //重复选中物体时
+                                //quitFlag++;
                             }
-                            data.Add("time", (nowTime - lastTime).ToString());
+                            else
+                            {
+                                //当切换选中物体时
+                                if(lastSelectedGameObject != null)
+                                {
+                                    InputField inputField = lastSelectedGameObject.GetComponent<InputField>();
+                                    if (inputField)
+                                    {
+                                        textVaule = inputField.text;
+                                        
+                                        data.Add("name", GetGameObjectPath(lastSelectedGameObject));
+                                        data.Add("type", inputField.GetType().ToString());
+                                        data.Add("value", textVaule);
+                                        data.Add("time", (nowTime - lastTime).ToString());
+                                        server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
+                                        data.Clear();
+                                    }
+                                }
+                                lastSelectedGameObject = flagGameObject;
+                                //quitFlag = 0;
+                            }
+                            if (flagGameObject != null) selectable = flagGameObject.GetComponent<Selectable>();
+                            else selectable = null;
+                            if (client.TcpClient.Connected && flagGameObject != null)
+                            {
+                                data.Add("name", GetGameObjectPath(flagGameObject));
+                                if (selectable)
+                                {
+                                    data.Add("type", selectable.GetType().ToString());
+                                    if (selectable is IDragHandler && Input.GetMouseButtonDown(0))
+                                    {
+                                        data.Add("start position", Input.mousePosition.ToString());
+                                    }
+                                }
+                                data.Add("time", (nowTime - lastTime).ToString());
+                                server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
+                                data.Clear();
+                            }
+
+                            if (!(selectable is InputField))
+                            {
+                                //不将这个置为空点击相同的控件就不会发送数据，但将这个置为空后，会影响ui的使用
+                                // EventSystem.current.SetSelectedGameObject(null);
+                                flagGameObject = null;
+                            }
+                        }
+
+                        if(data.Count > 0)
+                        {
                             server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
                             data.Clear();
                         }
 
-                        if (!(selectable is InputField))
-                        {
-                            //不将这个置为空点击相同的控件就不会发送数据，但将这个置为空后，会影响ui的使用
-                            // EventSystem.current.SetSelectedGameObject(null);
-                            flagGameObject = null;
-                        }
                     }
-
-                    if(data.Count > 0)
+                    catch(Exception e)
                     {
-                        server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
-                        data.Clear();
+                        server.Send(client.TcpClient, prot.pack(e.ToString()));
                     }
-
-                }
-                catch(Exception e)
-                {
-                    server.Send(client.TcpClient, prot.pack(e.ToString()));
                 }
 
                 yield return null;

@@ -148,6 +148,9 @@ namespace UAutoSDK
         private static Type UITextureType=null;
         private static Type UISpriteType=null;
 
+        
+        private bool pauseDebugMode = false;
+
         public void Init()
         {
             Application.runInBackground = true;
@@ -178,6 +181,9 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("getPNGScreenshot", getPNGScreenshotHandler);
             m_Handlers.addMsgHandler("dragObject", dragObjectHandler);
             m_Handlers.addMsgHandler("debugMode", debugModeHandler);
+            m_Handlers.addMsgHandler("pauseDebugMode", pauseDebugModeHandler);
+            m_Handlers.addMsgHandler("resumeDebugMode", resumeDebugModeHandler);
+            m_Handlers.addMsgHandler("stopDebugMode", stopDebugModeHandler);
             m_Handlers.addMsgHandler("findAllText", findAllTextHandler);
             m_Handlers.addMsgHandler("objectFind", objectFindHandler);
             m_Handlers.addMsgHandler("getParent", getParentHandler);
@@ -1578,11 +1584,43 @@ namespace UAutoSDK
             }
         }
 
+        private object resumeDebugModeHandler(string[] args)
+        {
+            pauseDebugMode = false;
+            return "200";
+        }
+
+        private object pauseDebugModeHandler(string[] args)
+        {
+            pauseDebugMode = true;
+            return "200";
+        }
+
+        private object stopDebugModeHandler(string[] args)
+        {
+            try
+            {
+                if (DebugModeEnumerator != null)
+                {
+                    StopCoroutine(DebugModeEnumerator);
+                    DebugModeEnumerator = null;
+                }
+
+                return "Close Debug Mode";
+            }
+            catch(Exception e)
+            {
+                return e.ToString();
+            }
+        }
+
         private object debugModeHandler(string[] args)
         {
             try
             {
+                pauseDebugMode = false;
                 data.Clear();
+
                 if(DebugModeEnumerator != null)
                 {
                     StopCoroutine(DebugModeEnumerator);
@@ -1617,69 +1655,59 @@ namespace UAutoSDK
                     yield break;
                 }
                 
-                //按住5秒就关闭调试模式
-                if(Input.GetMouseButton(0))
+                // 暂停录制
+                if (!pauseDebugMode)
                 {
-                    quitTime += Time.unscaledDeltaTime;
-                }
-                else
-                {
-                    quitTime = 0;
-                }
-
-                if (quitTime >= maxQuitTime)
-                {
-                    server.Send(client.TcpClient, prot.pack("Close Debug Mode"));
-                    StopCoroutine(DebugModeEnumerator);
-                    DebugModeEnumerator = null;
-                    yield break;
-                }
-
-                try
-                {
-
-                    GameObject currentSelectedGameObject = (GameObject) UICameraType.GetProperty("selectedObject").GetValue(null);
-                    // Debug.Log("selectedObject: " + GetGameObjectPath(currentSelectedGameObject));
-
-                    if(Input.GetMouseButtonDown(0))
+                    //按住5秒就关闭调试模式
+                    if(Input.GetMouseButton(0))
                     {
-                        Vector2 pos = Input.mousePosition;
-                        data.Add("press position", pos.ToString());
+                        quitTime += Time.unscaledDeltaTime;
+                    }
+                    else
+                    {
+                        quitTime = 0;
                     }
 
-                    //当选中物体时
-                    if (flagGameObject != currentSelectedGameObject)
+                    if (quitTime >= maxQuitTime)
                     {
-                        lastTime = nowTime;
-                        nowTime = Time.unscaledTime;
-                        flagGameObject = currentSelectedGameObject;
-                        if (lastSelectedGameObject == flagGameObject)
+                        server.Send(client.TcpClient, prot.pack("Close Debug Mode"));
+                        StopCoroutine(DebugModeEnumerator);
+                        DebugModeEnumerator = null;
+                        yield break;
+                    }
+
+                    try
+                    {
+
+                        GameObject currentSelectedGameObject = (GameObject) UICameraType.GetProperty("selectedObject").GetValue(null);
+                        // Debug.Log("selectedObject: " + GetGameObjectPath(currentSelectedGameObject));
+
+                        if(Input.GetMouseButtonDown(0))
                         {
-                            //重复选中物体时
-                            //quitFlag++;
+                            Vector2 pos = Input.mousePosition;
+                            data.Add("press position", pos.ToString());
                         }
-                        else
+
+                        //当选中物体时
+                        if (flagGameObject != currentSelectedGameObject)
                         {
-                            //当切换选中物体时
-                            if(lastSelectedGameObject != null)
+                            lastTime = nowTime;
+                            nowTime = Time.unscaledTime;
+                            flagGameObject = currentSelectedGameObject;
+                            if (lastSelectedGameObject == flagGameObject)
                             {
+                                //重复选中物体时
+                                //quitFlag++;
+                            }
+                            else
+                            {
+                                //当切换选中物体时
+                                if(lastSelectedGameObject != null)
+                                {
 
 
-                                // UIInput
-                                string text = (string)ReflectionTool.GetComponentAttribute(lastSelectedGameObject, UIInputType, "value");
-                                if (text != null)
-                                {
-                                    // data.Clear();
-                                    data.Add("name", GetGameObjectPath(lastSelectedGameObject));
-                                    data.Add("value", text);
-                                    data.Add("time", (nowTime - lastTime).ToString());
-                                    server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
-                                    data.Clear();
-                                }
-                                else
-                                {
-                                    //NGUI 3.0
-                                    text = (string)ReflectionTool.GetComponentAttribute(lastSelectedGameObject, UIInputType, "text");
+                                    // UIInput
+                                    string text = (string)ReflectionTool.GetComponentAttribute(lastSelectedGameObject, UIInputType, "value");
                                     if (text != null)
                                     {
                                         // data.Clear();
@@ -1689,40 +1717,54 @@ namespace UAutoSDK
                                         server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
                                         data.Clear();
                                     }
-                                }
+                                    else
+                                    {
+                                        //NGUI 3.0
+                                        text = (string)ReflectionTool.GetComponentAttribute(lastSelectedGameObject, UIInputType, "text");
+                                        if (text != null)
+                                        {
+                                            // data.Clear();
+                                            data.Add("name", GetGameObjectPath(lastSelectedGameObject));
+                                            data.Add("value", text);
+                                            data.Add("time", (nowTime - lastTime).ToString());
+                                            server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
+                                            data.Clear();
+                                        }
+                                    }
 
+                                }
+                                lastSelectedGameObject = flagGameObject;
+                                //quitFlag = 0;
                             }
-                            lastSelectedGameObject = flagGameObject;
-                            //quitFlag = 0;
+                            if (client.TcpClient.Connected && flagGameObject != null)
+                            {
+                                // data.Clear();
+                                data.Add("name", GetGameObjectPath(flagGameObject));
+                                data.Add("time", (nowTime - lastTime).ToString());
+                                server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
+                                data.Clear();
+                            }
+
+                            if (flagGameObject.GetComponent(UIInputType) == null)
+                            {
+                                //不将这个置为空点击相同的控件就不会发送数据，但将这个置为空后，会影响ui的使用
+                                UICameraType.GetProperty("selectedObject").SetValue(null, null);
+                                flagGameObject = null;
+                            }
                         }
-                        if (client.TcpClient.Connected && flagGameObject != null)
+
+
+                        if(data.Count != 0)
                         {
-                            // data.Clear();
-                            data.Add("name", GetGameObjectPath(flagGameObject));
-                            data.Add("time", (nowTime - lastTime).ToString());
                             server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
                             data.Clear();
                         }
 
-                        if (flagGameObject.GetComponent(UIInputType) == null)
-                        {
-                            //不将这个置为空点击相同的控件就不会发送数据，但将这个置为空后，会影响ui的使用
-                            UICameraType.GetProperty("selectedObject").SetValue(null, null);
-                            flagGameObject = null;
-                        }
                     }
-
-
-                    if(data.Count != 0)
+                    catch(Exception e)
                     {
-                        server.Send(client.TcpClient, prot.pack(JsonMapper.ToJson(data)));
-                        data.Clear();
+                        server.Send(client.TcpClient, prot.pack(e.ToString()));
                     }
-
-                }
-                catch(Exception e)
-                {
-                    server.Send(client.TcpClient, prot.pack(e.ToString()));
                 }
 
                 yield return null;
