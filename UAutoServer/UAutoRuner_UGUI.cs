@@ -48,6 +48,9 @@ namespace UAutoSDK
         private bool debugModeDeepSearch = false;
         private bool pauseDebugMode = false;
 
+        private string profilerDataName = "";
+        private string profilerDataPath = "";
+
         public void Init()
         {
             Application.runInBackground = true;
@@ -1442,6 +1445,9 @@ namespace UAutoSDK
             //标记data文件最大使用1GB储存空间
             Profiler.maxUsedMemory = 1024 * 1024 * 1024;
 
+            profilerDataPath = Application.persistentDataPath;
+            profilerDataName = fileName;
+
         }
 
         private void EndSample()
@@ -1449,6 +1455,17 @@ namespace UAutoSDK
             Profiler.enabled = false;
             Profiler.logFile = "";
             Profiler.enableBinaryLog = false;
+
+            try
+            {
+                dataJson.Clear();
+                dataJson.Append("{\"path\":\"" + profilerDataPath + "\",\"name\":\"" + profilerDataName + "\"}");
+                server.Send(client.TcpClient, prot.pack(dataJson.ToString()));
+            }
+            catch (Exception e)
+            {
+                server.Send(client.TcpClient, prot.pack(e.ToString()));
+            }
         }
 
         private void ProfilerInit()
@@ -1504,6 +1521,8 @@ namespace UAutoSDK
                         startSample = true;
                         startRecordProfileIEnumerator = StartRecordProfile();
                         StartCoroutine(startRecordProfileIEnumerator);
+
+                        response = "record profile start";
                     }
                     else
                     {
@@ -1522,6 +1541,8 @@ namespace UAutoSDK
 
                         StopCoroutine(startRecordProfileIEnumerator);
                         startRecordProfileIEnumerator = null;
+
+                        response = "record profile stop";
                     }
                     else
                     {
@@ -1531,7 +1552,7 @@ namespace UAutoSDK
             }
             catch (Exception e)
             {
-                response = e.ToString();
+                response = "-1";
             }
             return response;
         }
