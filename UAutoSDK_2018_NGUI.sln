@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.1062
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UAutoSDK_UGUI", "UAutoSDK_UGUI.csproj", "{F649B5C4-D413-4145-915B-DA0213F87C1A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UAutoSDK_2018_NGUI", "UAutoSDK_2018_NGUI.csproj", "{0DD8DE23-4601-4EE8-92B3-C935EE7756EE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F649B5C4-D413-4145-915B-DA0213F87C1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F649B5C4-D413-4145-915B-DA0213F87C1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F649B5C4-D413-4145-915B-DA0213F87C1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F649B5C4-D413-4145-915B-DA0213F87C1A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0DD8DE23-4601-4EE8-92B3-C935EE7756EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0DD8DE23-4601-4EE8-92B3-C935EE7756EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0DD8DE23-4601-4EE8-92B3-C935EE7756EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0DD8DE23-4601-4EE8-92B3-C935EE7756EE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {0FD77CD7-EF16-4A7D-B2EB-5A45BA6A8BE2}
+		SolutionGuid = {317705B0-BE24-4A87-83EF-A8D345798A8D}
 	EndGlobalSection
 EndGlobal

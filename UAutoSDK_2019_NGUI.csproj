@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Remove="UAutoRuner_UGUI.cs" />
     <Compile Remove="UAutoSdkInit.cs" />
+    <Compile Remove="UAutoSdkInit_new.cs" />
   </ItemGroup>
 
   <ItemGroup>
