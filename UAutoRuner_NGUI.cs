@@ -1,4 +1,5 @@
 //using Newtonsoft.Json;
+#if NGUI
 using System;
 using System.Collections.Generic;
 using System.Collections;
@@ -2374,3 +2375,4 @@ namespace UAutoSDK
 //         return null;
 //     }
 // }
+#endif

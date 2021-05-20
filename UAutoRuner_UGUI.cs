@@ -1,4 +1,5 @@
 //using Newtonsoft.Json;
+#if UGUI
 using System;
 using System.Collections;
 using UnityEngine.Profiling;
@@ -14,6 +15,9 @@ using UnityEngine.SceneManagement;
 using System.Linq;
 // using UnityEditor;
 using System.Reflection;
+#if UNITY_EDITOR
+using UnityEditorInternal;
+#endif
 //using System.Linq;
 
 namespace UAutoSDK
@@ -33,11 +37,11 @@ namespace UAutoSDK
         private bool requestFlag = false;
         public AsyncTcpServer server = null;
         public MsgParser m_Handlers = null;
-        private MsgProtocol prot = null;
+        public MsgProtocol prot = null;
         private StringBuilder response = new StringBuilder();
         //private ConcurrentDictionary<string, TcpClientState> inbox = new ConcurrentDictionary<string, TcpClientState>();
         //private KeyValuePair<string, TcpClientState> client;
-        private TcpClientState client;
+        public TcpClientState client;
         private List<string> msgs;
         private Dictionary<string, string> data = new Dictionary<string, string>();
         private List<string> dataList = new List<string>();
@@ -90,6 +94,7 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("getHierarchy", getHierarchyHandler);
             m_Handlers.addMsgHandler("getInspector", getInspectorHandler);
             m_Handlers.addMsgHandler("RecordProfile", RecordProfileHandler);
+            m_Handlers.addMsgHandler("getUnityVersion", getUnityVersionHandler);
         }
 
         public void Run()
@@ -1398,6 +1403,18 @@ namespace UAutoSDK
             }
         }
 
+        private object getUnityVersionHandler(string[] args)
+        {
+            try
+            {
+                return Application.unityVersion;
+            }
+            catch(Exception e)
+            {
+                return e.ToString();
+            }
+        }
+
         private object debugModeHandler(string[] args)
         {
             try
@@ -1431,19 +1448,35 @@ namespace UAutoSDK
 
         private void BeginSample(string fileName)
         {
-            Profiler.SetAreaEnabled(0, true);
-            Profiler.SetAreaEnabled((ProfilerArea)2, true);
-            Profiler.SetAreaEnabled((ProfilerArea)1, true);
-            Profiler.SetAreaEnabled((ProfilerArea)3, true);
-            Profiler.SetAreaEnabled((ProfilerArea)6, true);
-            Profiler.SetAreaEnabled((ProfilerArea)10, true);
-            Profiler.SetAreaEnabled((ProfilerArea)11, true);
-            Profiler.SetAreaEnabled((ProfilerArea)12, true);
+
+            // Profiler.SetAreaEnabled(0, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)2, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)1, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)3, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)6, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)10, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)11, true);
+            // Profiler.SetAreaEnabled((ProfilerArea)12, true);
+            Profiler.SetAreaEnabled(ProfilerArea.CPU, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Rendering, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Memory, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Physics, true);
+            Profiler.SetAreaEnabled(ProfilerArea.UI, true);
+            //标记data文件最大使用1GB储存空间
+            Profiler.maxUsedMemory = 1024 * 1024 * 1024;
+            
             Profiler.logFile = Application.persistentDataPath + "/" + fileName;
             Profiler.enableBinaryLog = true;
             Profiler.enabled = true;
-            //标记data文件最大使用1GB储存空间
-            Profiler.maxUsedMemory = 1024 * 1024 * 1024;
+            // Profiler.enabled = false;
+
+            
+            
+// #if UNITY_EDITOR
+//             ProfilerDriver.SaveProfile(Application.persistentDataPath + "/" + fileName);
+// #else
+            // Profiler.logFile = Application.persistentDataPath + "/" + fileName;
+// #endif
 
             profilerDataPath = Application.persistentDataPath;
             profilerDataName = fileName;
@@ -2376,3 +2409,4 @@ namespace UAutoSDK
 //         return null;
 //     }
 // }
+#endif
