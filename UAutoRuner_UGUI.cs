@@ -89,6 +89,7 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("resumeDebugMode", resumeDebugModeHandler);
             m_Handlers.addMsgHandler("stopDebugMode", stopDebugModeHandler);
             m_Handlers.addMsgHandler("findAllText", findAllTextHandler);
+            m_Handlers.addMsgHandler("findText", findTextHandler);
             m_Handlers.addMsgHandler("objectFind", objectFindHandler);
             m_Handlers.addMsgHandler("getParent", getParentHandler);
             m_Handlers.addMsgHandler("getHierarchy", getHierarchyHandler);
@@ -338,6 +339,36 @@ namespace UAutoSDK
                     DestroyImmediate(temp);
             }
 
+        }
+
+        private object findTextHandler(string[] args)
+        {
+            try
+            {
+                string keyword = args[1];
+                List<Text> texts = FindAllGameObject<Text>();
+                dataJson.Clear();
+                dataJson.Append("[");
+
+                for(int i = 0; i < texts.Count; ++i)
+                {
+                    if(texts[i].text.Contains(keyword))
+                    {
+                        dataJson.Append("{\"name\":\"" + GetGameObjectPath(texts[i].gameObject) + "\",\"id\":\"" + texts[i].gameObject.GetInstanceID().ToString() + "\",\"value\":\"" + texts[i].text + "\"},");
+                    }
+                }
+
+                if (dataJson.Length > 1)
+                    dataJson.Remove(dataJson.Length - 1, 1);
+
+                dataJson.Append("]");
+
+                return dataJson.ToString();
+            }
+            catch(Exception e)
+            {
+                return e.ToString();
+            }
         }
 
         private object findAllTextHandler(string[] pieces)
