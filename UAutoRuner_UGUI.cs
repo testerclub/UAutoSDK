@@ -66,23 +66,17 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("closeConnection", closeHandler);
             m_Handlers.addMsgHandler("findObject", findObjectHandler);
             m_Handlers.addMsgHandler("tapObject", tapObjectHandler);
-            m_Handlers.addMsgHandler("findObjectsWhereNameContains", findObjectsWhereNameContainsHandler);
             m_Handlers.addMsgHandler("getText", getTextHandler);
             m_Handlers.addMsgHandler("setText", setTextHandler);
             m_Handlers.addMsgHandler("findObjectAndTap", findObjectAndTapHandler);
-            m_Handlers.addMsgHandler("findObjectInRangeWhereNameContains", findObjectInRangeWhereNameContainsHandler);
             m_Handlers.addMsgHandler("objectExist", objectExistHandler);
-            m_Handlers.addMsgHandler("findAllObjectWhereTextContains", findAllObjectWhereTextContainsHandler);
             m_Handlers.addMsgHandler("getScreen", getScreenHandler);
             m_Handlers.addMsgHandler("findChild", findChildHandler);
             m_Handlers.addMsgHandler("findObjectByLevel", findObjectByLevelHandler);
             m_Handlers.addMsgHandler("tapScreen", tapScreenHandler);
             m_Handlers.addMsgHandler("getRectTransformPoints", getRectTransformPointsHandler);
             m_Handlers.addMsgHandler("getValueOnComponent", getValueOnComponentHandler);
-            m_Handlers.addMsgHandler("findObjectByPoint", findObjectByPointHandler);
             m_Handlers.addMsgHandler("findObjectAllChildren", findObjectAllChildrenHandler);
-            m_Handlers.addMsgHandler("findAllObjectInRangeWhereTextContains", findAllObjectInRangeWhereTextContainsHandler);
-            m_Handlers.addMsgHandler("getPNGScreenshot", getPNGScreenshotHandler);
             m_Handlers.addMsgHandler("dragObject", dragObjectHandler);
             m_Handlers.addMsgHandler("debugMode", debugModeHandler);
             m_Handlers.addMsgHandler("pauseDebugMode", pauseDebugModeHandler);
@@ -167,7 +161,7 @@ namespace UAutoSDK
 
         private object GetSDKVersion(string[] param)
         {
-            return "2.0.1";
+            return "2.1.0";
         }
 
         private object enableLogging(string[] args)
@@ -341,20 +335,36 @@ namespace UAutoSDK
 
         }
 
+        /// <summary>
+        /// 根据关键字查找所有文本 Text 和文字输入 InputField，并返回其中包含关键字的
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         private object findTextHandler(string[] args)
         {
             try
             {
                 string keyword = args[1];
                 List<Text> texts = FindAllGameObject<Text>();
+                List<InputField> inputFields = FindAllGameObject<InputField>();
                 dataJson.Clear();
                 dataJson.Append("[");
 
                 for(int i = 0; i < texts.Count; ++i)
                 {
-                    if(texts[i].text.Contains(keyword))
+                    Text text = texts[i];
+                    if(text.gameObject.activeInHierarchy && text.text.Contains(keyword))
                     {
-                        dataJson.Append("{\"name\":\"" + GetGameObjectPath(texts[i].gameObject) + "\",\"id\":\"" + texts[i].gameObject.GetInstanceID().ToString() + "\",\"value\":\"" + texts[i].text + "\"},");
+                        dataJson.Append("{\"name\":\"" + GetGameObjectPath(text.gameObject) + "\",\"id\":\"" + text.gameObject.GetInstanceID().ToString() + "\",\"value\":\"" + text.text + "\"},");
+                    }
+                }
+
+                for(int i = 0; i < inputFields.Count; ++i)
+                {
+                    InputField inputField = inputFields[i];
+                    if(inputField.gameObject.activeInHierarchy && inputField.text.Contains(keyword))
+                    {
+                        dataJson.Append("{\"name\":\"" + GetGameObjectPath(inputField.gameObject) + "\",\"id\":\"" + inputField.gameObject.GetInstanceID().ToString() + "\",\"value\":\"" + inputField.text + "\"},");
                     }
                 }
 
@@ -494,59 +504,6 @@ namespace UAutoSDK
                     }
                 },true);
                 if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
-                dataJson.Append("]");
-                return dataJson;
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
-
-        /// <summary>
-        /// 获取文本包含目标字符串的全部物体
-        /// </summary>
-        /// <param name="pieces"></param>
-        /// <returns></returns>
-        private object findAllObjectInRangeWhereTextContainsHandler(string[] pieces)
-        {
-            try
-            {
-                string path = pieces[1].Replace("//", "/");
-                target = GameObject.Find(path);
-                if (target == null) throw new Exception(Error.NotFoundMessage);
-                dataJson.Clear();
-                dataJson.Append("[");
-                //不包含本身
-                //dataJson.Append("{\"name\":\"" + target.name + "\",\"id\":\"" + target.GetInstanceID().ToString() + "\"},");
-                FindAllObjectFromParent(target, path, (Node temp) =>
-                {
-                    RectTransform rect = temp.obj.GetComponent<RectTransform>();
-                    if (rect)
-                    {
-                        Vector3[] vector3s = GetScreenCoordinates(rect);
-                        Text text = temp.obj.GetComponent<Text>();
-                        if (text && text.text.Contains(pieces[2]))
-                        {
-                            dataJson.Append("{\"name\":\"" + temp.path + "\",\"id\":\"" + temp.obj.GetInstanceID().ToString()
-                                + "\",\"center\":\"" + ((vector3s[0] + vector3s[2]) / 2).ToString()
-                                + "\",\"enabled\":\"" + (temp.obj.activeInHierarchy).ToString()
-                                + "\"},");
-                        }
-                        else
-                        {
-                            InputField inputField = temp.obj.GetComponent<InputField>();
-                            if (inputField && inputField.text.Contains(pieces[2]))
-                            {
-                                dataJson.Append("{\"name\":\"" + temp.path + "\",\"id\":\"" + temp.obj.GetInstanceID().ToString()
-                                    + "\",\"center\":\"" + ((vector3s[0] + vector3s[2]) / 2).ToString()
-                                    + "\",\"enabled\":\"" + (temp.obj.activeInHierarchy).ToString()
-                                    + "\"},");
-                            }
-                        }
-                    }
-                },true);
-                if(dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
                 dataJson.Append("]");
                 return dataJson;
             }
@@ -711,100 +668,7 @@ namespace UAutoSDK
                 return e.ToString();
             }
         }
-        /// <summary>
-        /// 寻找全部名称包含目标字符串的物体
-        /// </summary>
-        /// <param name="pieces">pieces[1]是目标字符串</param>
-        /// <returns>符合条件的物体列表</returns>
-        private object findObjectsWhereNameContainsHandler(string[] pieces)
-        {
-            try
-            {
-                string partName = pieces[1];
-                if (partName == "") throw new Exception(Error.NotFoundMessage);
-                //List<Dictionary<string, string>> datas = new List<Dictionary<string, string>>();
-                //dataList.Clear();
-                dataJson.Clear();
-                dataJson.Append("[");
-                foreach (GameObject iterObj in FindObjectsOfType<GameObject>())
-                {
-                    if (iterObj.name.Contains(partName) && iterObj.activeInHierarchy)
-                    {
-                        //Dictionary<string, string> dictionary = new Dictionary<string, string>() 
-                        //{
-                        //    { "name", iterObj.name },
-                        //    { "id", iterObj.GetInstanceID().ToString() }
-                        //};
-                        //dataJson.Append("{");
-                        //dataJson.Append("\"" + "name" + "\""+ ":" + "\"" +iterObj.name + "\"");
-                        //dataJson.Append(",");
-                        //dataJson.Append("\"" + "id" + "\"" + ":" + "\"" + iterObj.GetInstanceID().ToString() + "\"");
-                        //dataJson.Append("}");
-                        //dataJson.Append(",");
-                        dataJson.Append("{\"name\":\"" + iterObj.name + "\",\"id\":\"" + iterObj.GetInstanceID().ToString() + "\"},");
-                        //dataJson.Append("{'name':'" + iterObj.name + "','id':'" + iterObj.GetInstanceID().ToString() + "'},");
-                        //dataList.Add(dataJson.ToString());
-                    }
-                }
-                if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
-                dataJson.Append("]");
-                return dataJson.ToString();
-                //return JsonMapper.ToJson(dataList);
-                //return JsonConvert.SerializeObject(data, MsgParser.settings);
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
-        /// <summary>
-        /// 在物体的子物体列表中，寻找名称包含目标字符的物体
-        /// </summary>
-        /// <param name="pieces"></param>
-        /// <returns>符合条件的物体列表</returns>
-        private object findObjectInRangeWhereNameContainsHandler(string[] pieces)
-        {
-            try
-            {
-                string partName = pieces[1];
-                string rangePathName = pieces[2];
-                target = GameObject.Find(pieces[2].Replace("//", "/"));
-                if (target == null || !target.activeInHierarchy) throw new Exception(Error.NotFoundMessage);
-                //List<Dictionary<string, string>> data = new List<Dictionary<string, string>>();
-                //dataList.Clear();
-                dataJson.Clear();
-                dataJson.Append("[");
-                for (int i = 0; i < target.transform.childCount; i++)
-                {
-                    Transform iterTransform = target.transform.GetChild(i);
-                    if (iterTransform.name.Contains(partName) && iterTransform.gameObject.activeInHierarchy)
-                    {
-                        //Dictionary<string, string> dictionary = new Dictionary<string, string>()
-                        //{
-                        //    { "name", iterTransform.name},
-                        //    { "id",iterTransform.gameObject.GetInstanceID().ToString()}
-                        //};
-                        //dataJson.Append("{");
-                        //dataJson.Append("\"" + "name" + "\"" + ":" + "\"" + iterTransform.name + "\"");
-                        //dataJson.Append(",");
-                        //dataJson.Append("\"" + "id" + "\"" + ":" + "\"" + iterTransform.gameObject.GetInstanceID().ToString() + "\"");
-                        //dataJson.Append("}");
-                        //dataJson.Append(",");
-                        dataJson.Append("{\"name\":\"" + iterTransform.name + "\",\"id\":\"" + iterTransform.gameObject.GetInstanceID().ToString() + "\"},");
-                        //dataList.Add(dataJson.ToString());
-                    }
-                }
-                if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
-                dataJson.Append("]");
-                return dataJson.ToString();
-                //return JsonConvert.SerializeObject(data, MsgParser.settings);
-                //return JsonMapper.ToJson(data);
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
+
         /// <summary>
         /// 获取物体上的Text组件或者InputField组件上的text
         /// </summary>
@@ -847,7 +711,6 @@ namespace UAutoSDK
         {
             try
             {
-
                 //var targetInfo = JsonConvert.DeserializeObject<Dictionary<string, string>>(args[2]);
                 data = JsonMapper.ToObject<Dictionary<string, string>>(args[1]);
 
@@ -1094,54 +957,7 @@ namespace UAutoSDK
                 return e.ToString();
             }
         }
-        /// <summary>
-        /// 寻找所有内容包含特定字符串的文本
-        /// </summary>
-        /// <param name="args">args[1]目标字符串</param>
-        /// <returns></returns>
-        private object findAllObjectWhereTextContainsHandler(string[] args)
-        {
-            try
-            {
 
-                string text = args[1];
-                List<Text> texts = FindAllGameObject<Text>();
-                List<InputField> inputFields = FindAllGameObject<InputField>();
-                
-                
-                dataJson.Clear();
-                dataJson.Append("[");
-
-                foreach(var i in texts)
-                {
-                    if(i.gameObject.activeInHierarchy && i.text.Contains(text))
-                    {
-                        
-                        string path = GetGameObjectPath(i.gameObject);
-                        dataJson.Append("{\"path\":\"" + path + "\",\"id\":\"" + i.gameObject.GetInstanceID().ToString() + "\"},");
-                    }
-                }
-
-                
-                foreach(var i in inputFields)
-                {
-                    if(i.gameObject.activeInHierarchy && i.text.Contains(text))
-                    {
-                        string path = GetGameObjectPath(i.gameObject);
-                        dataJson.Append("{\"path\":\"" + path + "\",\"id\":\"" + i.gameObject.GetInstanceID().ToString() + "\"},");
-                    }
-                }
-
-                if (dataJson.Length > 1) dataJson.Remove(dataJson.Length - 1, 1);
-                dataJson.Append("]");
-
-                return dataJson.ToString();
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
         /// <summary>
         /// 点击屏幕
         /// </summary>
@@ -1178,38 +994,6 @@ namespace UAutoSDK
                 data.Clear();
                 data.Add("name", GetGameObjectPath(gameObject));
                 data.Add("id", gameObject.GetInstanceID().ToString());
-                return JsonMapper.ToJson(data);
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
-
-        /// <summary>
-        /// 通过点投射获得物体,目前只对可互动的UI有效？
-        /// </summary>
-        /// <param name="pieces">pieces[1]屏幕x坐标，pieces[2]屏幕y坐标</param>
-        /// <returns>被中心投射的物体id和名称</returns>
-        private object findObjectByPointHandler(string[] pieces)
-        {
-            try
-            {
-                Touch touch = new Touch { position = new Vector2(float.Parse(pieces[1]), float.Parse(pieces[2])) };
-                var pointerEventData = MockUpPointerInputModule.GetPointerEventData(touch);
-                GameObject gameObject = pointerEventData.pointerPress.gameObject;
-                if (gameObject != null)
-                {
-                    data.Clear();
-                    data.Add("name", GetGameObjectPath(gameObject));
-                    data.Add("id", gameObject.GetInstanceID().ToString());
-                }
-                else
-                {
-                    throw new Exception(Error.NotFoundMessage);
-                }
-
-               
                 return JsonMapper.ToJson(data);
             }
             catch (Exception e)
@@ -1271,28 +1055,6 @@ namespace UAutoSDK
             {
                 return e.ToString();
             }
-        }
-
-        private object getPNGScreenshotHandler(string[] args)
-        {
-            try
-            {
-                StartCoroutine(GetPNGScreenshot());
-                return "Ok";
-            }
-            catch (Exception e)
-            {
-                return e.ToString();
-            }
-        }
-
-        private System.Collections.IEnumerator GetPNGScreenshot()
-        {
-            yield return new WaitForEndOfFrame();
-            Texture2D screenshot = UnityEngine.ScreenCapture.CaptureScreenshotAsTexture();
-            byte[] bytesPNG = UnityEngine.ImageConversion.EncodeToPNG(screenshot);
-            string pngAsString = Convert.ToBase64String(bytesPNG);
-            server.Send(client.TcpClient, prot.pack(pngAsString));
         }
 
         private object objectFindHandler(string[] args)
