@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DefineConstants>TRACE;ENABLE_PROFILER;UGUI</DefineConstants>
+    <DefineConstants>TRACE;ENABLE_PROFILER;NGUI</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

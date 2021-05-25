@@ -152,6 +152,9 @@ namespace UAutoSDK
         
         private bool pauseDebugMode = false;
 
+        private string profilerDataName = "";
+        private string profilerDataPath = "";
+
         public void Init()
         {
             Application.runInBackground = true;
@@ -186,12 +189,14 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("resumeDebugMode", resumeDebugModeHandler);
             m_Handlers.addMsgHandler("stopDebugMode", stopDebugModeHandler);
             m_Handlers.addMsgHandler("findAllText", findAllTextHandler);
+            m_Handlers.addMsgHandler("findText", findTextHandler);
             m_Handlers.addMsgHandler("objectFind", objectFindHandler);
             m_Handlers.addMsgHandler("getParent", getParentHandler);
             m_Handlers.addMsgHandler("getHierarchy", getHierarchyHandler);
             m_Handlers.addMsgHandler("getInspector", getInspectorHandler);
 
             m_Handlers.addMsgHandler("RecordProfile", RecordProfileHandler);
+            m_Handlers.addMsgHandler("getUnityVersion", getUnityVersionHandler);
 
             InitNGUI();
         }
@@ -455,6 +460,41 @@ namespace UAutoSDK
                     DestroyImmediate(temp);
             }
 
+        }
+
+
+        private object findTextHandler(string[] args)
+        {
+            try
+            {
+                string keyword = args[1];
+                dataJson.Clear();
+
+                GameObject[] gameObjects = FindObjectsOfType<GameObject>();
+
+
+                dataJson.Append("[");
+
+                for(int i = 0; i < gameObjects.Length; ++i)
+                {
+                    string text = getText(gameObjects[i]);
+                    if(text != null && text.Contains(keyword))
+                    {
+                        dataJson.Append("{\"name\":\"" + GetGameObjectPath(gameObjects[i]) + "\",\"id\":\"" + gameObjects[i].GetInstanceID().ToString() + "\",\"value\":\"" + text + "\"},");
+                    }
+                }
+
+                if (dataJson.Length > 1)
+                    dataJson.Remove(dataJson.Length - 1, 1);
+
+                dataJson.Append("]");
+
+                return dataJson.ToString();
+            }
+            catch (Exception e)
+            {
+                return e.ToString();
+            }
         }
 
         private object findAllTextHandler(string[] pieces)
@@ -1291,20 +1331,29 @@ namespace UAutoSDK
 
         private void BeginSample(string fileName)
         {
-            Profiler.SetAreaEnabled(0, true);
+            /*Profiler.SetAreaEnabled(0, true);
             Profiler.SetAreaEnabled((ProfilerArea)2, true);
             Profiler.SetAreaEnabled((ProfilerArea)1, true);
             Profiler.SetAreaEnabled((ProfilerArea)3, true);
             Profiler.SetAreaEnabled((ProfilerArea)6, true);
             Profiler.SetAreaEnabled((ProfilerArea)10, true);
             Profiler.SetAreaEnabled((ProfilerArea)11, true);
-            Profiler.SetAreaEnabled((ProfilerArea)12, true);
-            Profiler.logFile = Application.persistentDataPath + "/" + fileName;
-            Profiler.enableBinaryLog = true;
-            Profiler.enabled = true;
+            Profiler.SetAreaEnabled((ProfilerArea)12, true);*/
+
+            Profiler.SetAreaEnabled(ProfilerArea.CPU, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Rendering, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Memory, true);
+            Profiler.SetAreaEnabled(ProfilerArea.Physics, true);
+            Profiler.SetAreaEnabled(ProfilerArea.UI, true);
             //标记data文件最大使用1GB储存空间
             Profiler.maxUsedMemory = 1024 * 1024 * 1024;
 
+            Profiler.logFile = Application.persistentDataPath + "/" + fileName;
+            Profiler.enableBinaryLog = true;
+            Profiler.enabled = true;
+
+            profilerDataPath = Application.persistentDataPath;
+            profilerDataName = fileName;
         }
 
         private void EndSample()
@@ -1312,6 +1361,17 @@ namespace UAutoSDK
             Profiler.enabled = false;
             Profiler.logFile = "";
             Profiler.enableBinaryLog = false;
+
+            try
+            {
+                dataJson.Clear();
+                dataJson.Append("{\"path\":\"" + profilerDataPath + "\",\"name\":\"" + profilerDataName + "\"}");
+                server.Send(client.TcpClient, prot.pack(dataJson.ToString()));
+            }
+            catch (Exception e)
+            {
+                server.Send(client.TcpClient, prot.pack(e.ToString()));
+            }
         }
 
         private void ProfilerInit()
@@ -1365,6 +1425,8 @@ namespace UAutoSDK
                         startSample = true;
                         startRecordProfileIEnumerator = StartRecordProfile();
                         StartCoroutine(startRecordProfileIEnumerator);
+
+                        response = "record profile start";
                     }
                     else
                     {
@@ -1383,6 +1445,8 @@ namespace UAutoSDK
 
                         StopCoroutine(startRecordProfileIEnumerator);
                         startRecordProfileIEnumerator = null;
+
+                        response = "record profile stop";
                     }
                     else
                     {
@@ -1392,7 +1456,7 @@ namespace UAutoSDK
             }
             catch (Exception e)
             {
-                response = e.ToString();
+                response = "-1";
             }
             return response;
         }
@@ -1610,6 +1674,18 @@ namespace UAutoSDK
                 return "Close Debug Mode";
             }
             catch(Exception e)
+            {
+                return e.ToString();
+            }
+        }
+
+        private object getUnityVersionHandler(string[] args)
+        {
+            try
+            {
+                return Application.unityVersion;
+            }
+            catch (Exception e)
             {
                 return e.ToString();
             }
