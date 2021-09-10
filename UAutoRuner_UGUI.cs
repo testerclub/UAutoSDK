@@ -22,6 +22,76 @@ using UnityEditorInternal;
 
 namespace UAutoSDK
 {
+
+    public class ReflectionTool
+    {
+        public static PropertyInfo GetPropertyNest(Type t, String name)
+        {
+
+            PropertyInfo pi = t.GetProperty(name);
+
+            if (pi != null)
+            {
+                return pi;
+            }
+
+            if (t.BaseType != null)
+            {
+                return GetPropertyNest(t.BaseType, name);
+            }
+
+            return null;
+        }
+
+        public static object GetComponentAttribute(GameObject target, Type t, String attributeName)
+        {
+            if (target == null || t == null)
+                return null;
+
+            Component component = target.GetComponent(t);
+
+            if (component == null)
+                return null;
+
+            PropertyInfo pi = GetPropertyNest(t, attributeName);
+
+            if (pi == null || !pi.CanRead)
+            {
+                return null;
+            }
+
+            return pi.GetValue(component, null);
+        }
+
+        public static bool SetComponentAttribute(GameObject obj, Type t, String attributeName, object value)
+        {
+
+            if (t == null)
+            {
+                return false;
+            }
+
+            Component comp = obj.GetComponent(t);
+
+            if (comp == null)
+            {
+                return false;
+            }
+
+            PropertyInfo pi = GetPropertyNest(t, attributeName);
+
+
+            if (pi == null || !pi.CanWrite)
+            {
+                return false;
+            }
+
+            pi.SetValue(comp, value, null);
+
+            return true;
+        }
+    }
+
     public class Error
     {
         public readonly static string NotFoundMessage = "error:notFound";
@@ -34,6 +104,7 @@ namespace UAutoSDK
         public int port = 13000;
         private bool mRunning;
         //private bool responseFlag = false;
+        private int requestCount = 0;
         private bool requestFlag = false;
         public AsyncTcpServer server = null;
         public MsgParser m_Handlers = null;
@@ -54,6 +125,18 @@ namespace UAutoSDK
 
         private string profilerDataName = "";
         private string profilerDataPath = "";
+
+        private List<string> profilerDataNames;
+        private List<string> profilerDataPaths;
+
+
+
+        public static readonly string TextMeshProUGUITypeName = "TMPro.TextMeshProUGUI, Unity.TextMeshPro, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null";
+        public static readonly string TMP_InputFieldTypeName = "TMPro.TMP_InputField, Unity.TextMeshPro, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null";
+
+
+        private static Type TextMeshProUGUIType = null;
+        private static Type TMP_InputFieldType = null;
 
         public void Init()
         {
@@ -89,7 +172,12 @@ namespace UAutoSDK
             m_Handlers.addMsgHandler("getHierarchy", getHierarchyHandler);
             m_Handlers.addMsgHandler("getInspector", getInspectorHandler);
             m_Handlers.addMsgHandler("RecordProfile", RecordProfileHandler);
+            m_Handlers.addMsgHandler("checkProfile", checkProfileHandler);
             m_Handlers.addMsgHandler("getUnityVersion", getUnityVersionHandler);
+
+
+            TextMeshProUGUIType = Type.GetType(TextMeshProUGUITypeName);
+            TMP_InputFieldType = Type.GetType(TMP_InputFieldTypeName);
         }
 
         public void Run()
@@ -148,7 +236,8 @@ namespace UAutoSDK
             //});
             //client = new KeyValuePair<string,TcpClientState>(tcpClientKey, internalClient);
             client = e.Client;
-            requestFlag = true;
+            // requestFlag = true;
+            requestCount++;
         }
 
 
@@ -290,6 +379,22 @@ namespace UAutoSDK
             return gameObjects;
         }
 
+        private List<GameObject> FindAllGameObject(Type type)
+        {
+            List<GameObject> gameObjects = new List<GameObject>();
+  
+            Action<Node> action = n =>
+            {
+                Component t = n.obj.GetComponent(type);
+                if (n.obj != null &&  t!= null)
+                {
+                    gameObjects.Add(t.gameObject);
+                }
+            };
+            FindAllGameObject(action);
+            return gameObjects;
+        }
+
         private void FindAllGameObject(Action<Node> action)
         {
             for (int i = 0; i < SceneManager.sceneCount; i++)
@@ -347,6 +452,7 @@ namespace UAutoSDK
                 string keyword = args[1];
                 List<Text> texts = FindAllGameObject<Text>();
                 List<InputField> inputFields = FindAllGameObject<InputField>();
+
                 dataJson.Clear();
                 dataJson.Append("[");
 
@@ -365,6 +471,34 @@ namespace UAutoSDK
                     if(inputField.gameObject.activeInHierarchy && inputField.text.Contains(keyword))
                     {
                         dataJson.Append("{\"name\":\"" + GetGameObjectPath(inputField.gameObject) + "\",\"id\":\"" + inputField.gameObject.GetInstanceID().ToString() + "\",\"value\":\"" + inputField.text + "\"},");
+                    }
+                }
+
+                if (TextMeshProUGUIType != null)
+                {
+                    List<GameObject> textMeshProUGUIs = FindAllGameObject(TextMeshProUGUIType);
+                    for (int i = 0; i < textMeshProUGUIs.Count; ++i)
+                    {
+                        GameObject textMeshProUGUI = textMeshProUGUIs[i];
+                        string text = (string)ReflectionTool.GetComponentAttribute(textMeshProUGUI, TextMeshProUGUIType, "text");
+                        if (textMeshProUGUI.activeInHierarchy && text.Contains(keyword))
+                        {
+                            dataJson.Append("{\"name\":\"" + GetGameObjectPath(textMeshProUGUI) + "\",\"id\":\"" + textMeshProUGUI.GetInstanceID().ToString() + "\",\"value\":\"" + text + "\"},");
+                        }
+                    }
+                }
+
+                if (TMP_InputFieldType != null)
+                {
+                    List<GameObject> tmp_InputFields = FindAllGameObject(TMP_InputFieldType);
+                    for (int i = 0; i < tmp_InputFields.Count; ++i)
+                    {
+                        GameObject tmp_InputField = tmp_InputFields[i];
+                        string text = (string)ReflectionTool.GetComponentAttribute(tmp_InputField, TMP_InputFieldType, "text");
+                        if (tmp_InputField.activeInHierarchy && text.Contains(keyword))
+                        {
+                            dataJson.Append("{\"name\":\"" + GetGameObjectPath(tmp_InputField) + "\",\"id\":\"" + tmp_InputField.GetInstanceID().ToString() + "\",\"value\":\"" + text + "\"},");
+                        }
                     }
                 }
 
@@ -694,6 +828,20 @@ namespace UAutoSDK
                     var uiInput = target.GetComponent<InputField>();
                     if (uiInput != null)
                         return uiInput.text;
+
+                    if (TextMeshProUGUIType != null)
+                    {
+                        string TextMeshProUGUIText = (string)ReflectionTool.GetComponentAttribute(target, TextMeshProUGUIType, "text");
+                        if (TextMeshProUGUIText != null)
+                            return TextMeshProUGUIText;
+                    }
+
+                    if (TMP_InputFieldType != null)
+                    {
+                        string TMP_InputFieldText = (string)ReflectionTool.GetComponentAttribute(target, TMP_InputFieldType, "text");
+                        if (TMP_InputFieldText != null)
+                            return TMP_InputFieldText;
+                    }
                 }
                 throw new Exception(Error.NotFoundMessage);
             }
@@ -725,6 +873,14 @@ namespace UAutoSDK
                         uiInput.text = args[2];
                         //return JsonConvert.SerializeObject(targetInfo, MsgParser.settings);
                         return JsonMapper.ToJson(data);
+                    }
+
+                    if (TMP_InputFieldType != null)
+                    {
+                        if (ReflectionTool.SetComponentAttribute(target, TMP_InputFieldType, "text", args[2]))
+                        {
+                            return JsonMapper.ToJson(data);
+                        }
                     }
 
                 }
@@ -947,6 +1103,7 @@ namespace UAutoSDK
                             }
                         }
 
+                        return "found component";
                     }
                     
                 }
@@ -1274,6 +1431,7 @@ namespace UAutoSDK
             profilerDataPath = Application.persistentDataPath;
             profilerDataName = fileName;
 
+
         }
 
         private void EndSample()
@@ -1282,6 +1440,11 @@ namespace UAutoSDK
             Profiler.logFile = "";
             Profiler.enableBinaryLog = false;
 
+
+            profilerDataPaths.Add(profilerDataPath);
+            profilerDataNames.Add(profilerDataName);
+
+            /*
             try
             {
                 dataJson.Clear();
@@ -1292,6 +1455,7 @@ namespace UAutoSDK
             {
                 server.Send(client.TcpClient, prot.pack(e.ToString()));
             }
+            */
         }
 
         private void ProfilerInit()
@@ -1299,6 +1463,9 @@ namespace UAutoSDK
             frameNum = 0;
             fileNum = 0;
             isRecording = false;
+
+            profilerDataNames = new List<string>();
+            profilerDataPaths = new List<string>();
         }
 
         bool startSample = false, isRecording = false;
@@ -1331,6 +1498,47 @@ namespace UAutoSDK
                 yield return null;
             }
         }
+
+        private string GetProfileData()
+        {
+            JsonWriter jw = new JsonWriter();
+
+            jw.WriteArrayStart();
+
+            for (int i = 0; i < profilerDataNames.Count; ++i)
+            {
+                jw.WriteObjectStart();
+
+                jw.WritePropertyName("path");
+                jw.Write(profilerDataPaths[i]);
+
+                jw.WritePropertyName("name");
+                jw.Write(profilerDataNames[i]);
+
+                jw.WriteObjectEnd();
+            }
+
+            jw.WriteArrayEnd();
+
+            profilerDataNames.Clear();
+            profilerDataPaths.Clear();
+
+            return jw.ToString();
+        }
+
+        private object checkProfileHandler(string[] args)
+        {
+            try
+            {
+                return GetProfileData();
+            }
+            catch (Exception e)
+            {
+                return e.ToString();
+            }
+        }
+
+
         private IEnumerator startRecordProfileIEnumerator = null;
         private object RecordProfileHandler(string[] args)
         {
@@ -1477,6 +1685,10 @@ namespace UAutoSDK
                         {
                             Vector2 pos = Input.mousePosition;
                             data.Add("press position", pos.ToString());
+
+                            float percentX = pos.x / Screen.width;
+                            float percentY = pos.y / Screen.height;
+                            data.Add("percent position", $"({percentX}, {percentY})");
                             
                             Touch touch = new Touch { position = pos };
                             PointerEventData pointerEventData = MockUpPointerInputModule.GetPointerEventData(touch);
@@ -1912,7 +2124,7 @@ namespace UAutoSDK
             //    });
             //}
             //if(requestFlag && client.Key != null && client.Value != null && client.Value.TcpClient != null)
-            if (requestFlag && client != null)
+            if (requestCount > 0 && client != null)
             {
                 //TcpClientState tcpClientState = client.Value;
                 //List<string> msgs = client.Prot.swap_msgs();
@@ -1930,8 +2142,11 @@ namespace UAutoSDK
                             if (response != null)
                             {
                                 //byte[] bytes = prot.pack(response);
+                                //Debug.Log($"[UAuto] Start Send: {response.ToString()}");
                                 server.Send(client.TcpClient, prot.pack(response.ToString()));
-                                requestFlag = false;
+                                //Debug.Log($"[UAuto] Send Finish");
+                                // requestFlag = false;
+                                requestCount--;
                                 //response.Clear();
                             }
                         });
